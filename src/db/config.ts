@@ -14,11 +14,14 @@ const dbConfig: PoolConfig = {
   // Connection pool settings
   max: parseInt(process.env.DB_POOL_MAX || '20'), // Maximum number of connections
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'), // 30 seconds
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000'), // 2 seconds
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '30000'), // 30 seconds (increased for Neon cloud latency)
   
-  // SSL configuration for Render and other cloud providers
+  // SSL configuration for Neon and other cloud providers
   ssl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' 
-    ? { rejectUnauthorized: false } 
+    ? {
+        rejectUnauthorized: false,
+        sslmode: 'require',
+      }
     : undefined,
 };
 
@@ -54,11 +57,20 @@ export function getPool(): Pool {
 export async function testConnection(): Promise<boolean> {
   try {
     const pool = getPool();
-    const result = await pool.query('SELECT NOW() as current_time, version() as pg_version');
-    console.log('✅ Database connection successful');
-    console.log(`   PostgreSQL version: ${result.rows[0].pg_version.split(',')[0]}`);
-    console.log(`   Server time: ${result.rows[0].current_time}`);
-    return true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 40000); // 40 second timeout
+    
+    try {
+      const result = await pool.query('SELECT NOW() as current_time, version() as pg_version');
+      clearTimeout(timeout);
+      console.log('✅ Database connection successful');
+      console.log(`   PostgreSQL version: ${result.rows[0].pg_version.split(',')[0]}`);
+      console.log(`   Server time: ${result.rows[0].current_time}`);
+      return true;
+    } catch (queryError) {
+      clearTimeout(timeout);
+      throw queryError;
+    }
   } catch (error) {
     console.error('❌ Database connection failed:', error);
     return false;
