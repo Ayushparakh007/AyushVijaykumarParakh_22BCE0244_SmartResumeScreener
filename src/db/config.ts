@@ -18,10 +18,7 @@ const dbConfig: PoolConfig = {
   
   // SSL configuration for Neon and other cloud providers
   ssl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' 
-    ? {
-        rejectUnauthorized: false,
-        sslmode: 'require',
-      }
+    ? { rejectUnauthorized: false }
     : undefined,
 };
 
